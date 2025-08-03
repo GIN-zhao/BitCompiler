@@ -1,4 +1,4 @@
-# Training DNNs Resilient to Adversarial and Random Bit-Flips by Learning Quantization Ranges
+# BitCompiler for Neural Network
 
 This repository contains a PyTorch implementation of weight clipping-aware training (WCAT) as described in our TMLR-2023 [paper](https://openreview.net/forum?id=BxjHMPwZIH&).
 
@@ -36,14 +36,5 @@ python src/main.py --configs 'configs/resnet20_cifar10.jsonnet, configs/quantiza
 ## Citation
 If you use this code for your research, please consider citing our paper:
 ```setup
-@article{
-chitsaz2023training,
-title={Training DNNs Resilient to Adversarial and Random Bit-Flips by Learning Quantization Ranges},
-author={Kamran Chitsaz and Goncalo Mordido and Jean-Pierre David and Francois Leduc-Primeau},
-journal={Transactions on Machine Learning Research},
-issn={2835-8856},
-year={2023},
-url={https://openreview.net/forum?id=BxjHMPwZIH},
-note={}
-}
+
 ```
