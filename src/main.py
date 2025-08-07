@@ -6,8 +6,8 @@ from common import Params, load_configs, creat_unique_experiment_name
 import fire
 import os 
 
-os.environ['https_proxy']= 'http://10.20.207.237:7890'
-os.environ['http_proxy']= 'http://10.20.207.237:7890'
+os.environ['https_proxy']= 'http://10.15.80.54:17890'
+os.environ['http_proxy']= 'http://10.15.80.54:17890'
 class EntryPoint(object):
     experiment = None
     configs = None

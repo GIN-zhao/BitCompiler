@@ -2,7 +2,7 @@ local base = (import 'base.jsonnet');
 
 base + {
     trainer+:{
-        num_epochs: 13,
+        num_epochs: 100,
         optimizer:
             {
                 type: 'SGD',

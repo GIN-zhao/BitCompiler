@@ -167,9 +167,8 @@ class _Clamp(torch.autograd.Function, Registrable):
         """
         ctx.q_range = q_range
         ctx.input = input.clone()
-        # print(f'input.device={input.device}')
         if signed:
-            return input.clamp(-q_range.to("cuda:0"), q_range.to("cuda:0"))
+            return input.clamp(-q_range, q_range)
         else:
             return input.clamp(torch.tensor(0.).to(q_range.device), q_range)
 
@@ -360,20 +359,16 @@ class WCAT(Quantizer):
         self.zero_point = torch.tensor(0.)
 
     def linear_quantize(self, input: torch.tensor):
-        input = input.to("cuda:0")
-        # print(f'linear_input.device={input.device}')
         if self.use_grad_scaled:
             q_range_grad_scale = 1.0 / (input.numel() ** 0.5)
             q_range = grad_scale(self.q_range, q_range_grad_scale)
         else:
             q_range = self.q_range
-        q_range = q_range.to("cuda:0")
         x = self.clip.apply(input, q_range, self.signed)
         if self.signed:
             self.step_size = q_range.detach() / (2 ** (self.N_bits - 1))
         else:
             self.step_size = q_range.detach() / (2 ** self.N_bits - 1)
-        # print(f'step_size.device={self.step_size.device}')
         x_int = round_pass((x / self.step_size) - self.zero_point)
         x_clip = torch.clamp(x_int, self.Qn, self.Qp)
         return (x_clip - x_int).detach() + x_int
@@ -397,11 +392,8 @@ class WCAT(Quantizer):
 
         def mse(q_range_star: float = 1.):
             self.q_range.data = torch.tensor(q_range_star)
-            
             input_quant = self.forward(input)
-            # print(f'input_quant.device={input_quant.device}')
-            # print(f'input.device={input.device}')
-            return torch.nn.functional.mse_loss(input.to("cuda:0"), input_quant).item()
+            return torch.nn.functional.mse_loss(input, input_quant).item()
 
         # q_range_ = np.array(max(input.abs().max().detach(), 1e-10))
         q_range_ = np.array(input.detach().abs().mean() * 2 * ((2 ** (self.N_bits - 1) - 1) ** 0.5))
@@ -441,6 +433,13 @@ class WCAT(Quantizer):
     def monitor_ranges(self):
         return {'max_weight': self.max_range, 'min_weight': self.min_range,
                 'range_pos': self.q_range.item(), 'range_neg': (-self.q_range).item()}
+
+
+@Quantizer.register("bwaq")
+class BWAQ(WCAT):
+    def __init__(self, bwaq_lambda: float = 0.01, **kwargs):
+        super().__init__(**kwargs)
+        self.bwaq_lambda = bwaq_lambda
 
 
 @Quantizer.register("wclip")
@@ -531,4 +530,3 @@ class Quantized_Conv2d(nn.Conv2d):
         # TODO: activation quantization
         weight_quant = self.weight_quantize_module(self.weight)
         return F.conv2d(input, weight_quant, self.bias, self.stride, self.padding, self.dilation, self.groups)
-

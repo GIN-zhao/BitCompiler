@@ -17,7 +17,7 @@ pip install -r requirements.txt
 ### Training
 To train a model on a given dataset using a specific quantization method, modify the configuration in the following command:
 ```setup
-python src/main.py --configs 'configs/resnet20_cifar10.jsonnet, configs/quantization/4bit_wcat.jsonnet' train
+python src/main.py --configs 'configs/resnet20_cifar10.jsonnet, configs/quantization/4bit_bwaq.jsonnet' train
 ```
 Please ensure that you have the necessary dataset and pre-trained models for this step.
 

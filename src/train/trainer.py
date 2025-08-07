@@ -4,6 +4,7 @@ import wandb
 import logging
 import os
 from collections import deque
+from quantization import BWAQ, Quantized_Conv2d, Quantized_Linear
 
 from .optimizer import Optimizer
 from .scheduler import Scheduler
@@ -166,6 +167,36 @@ class Trainer(FromParams):
 
             if self.max_mag_coef is not None:
                 loss += self.max_mag_coef * model.compute_max_magnitude_loss()
+
+            # BWAQ regularization
+            bwaq_loss = torch.tensor(0.0).to(model.device)
+            for module in model.modules():
+                if isinstance(module, (Quantized_Conv2d, Quantized_Linear)):
+                    if isinstance(module.weight_quantize_module, BWAQ):
+                        quantizer = module.weight_quantize_module
+                        w = module.weight
+                        
+                        # Calculate the change in weight if MSB is flipped
+                        w_int = quantizer.linear_quantize(w)
+                        w_uint = quantizer.int2bin(w_int)
+                        
+                        msb_mask = 1 << (quantizer.N_bits - 1)
+                        msb_mask = torch.tensor(msb_mask, device=w_uint.device, dtype=w_uint.dtype)
+
+                        w_uint_flipped = w_uint ^ msb_mask
+                        w_int_flipped = quantizer.bin2int(w_uint_flipped)
+                        
+                        w_dequant = quantizer.linear_dequantize(w_int)
+                        w_flipped_dequant = quantizer.linear_dequantize(w_int_flipped)
+                        
+                        delta_w = w_flipped_dequant - w_dequant
+                        
+                        # Penalty is the squared change in magnitude
+                        penalty = torch.mean(delta_w ** 2)
+                        bwaq_loss += quantizer.bwaq_lambda * penalty
+            
+            loss += bwaq_loss
+
             self.optimizer.zero_grad()
             loss.backward()
             if self.grad_clip is not None:
@@ -193,5 +224,3 @@ class Trainer(FromParams):
                     model.monitoring_range(self.wandb_logs)
 
         self.save_best_model_checkpoint()
-
-
