@@ -8,7 +8,7 @@ import logging
 from typing import Iterator
 
 
-def make_quant_layer(weight_quantize_module: Quantizer, module: torch.nn.Module, layer_type: torch.nn):
+def make_quant_layer(weight_quantize_module: Quantizer, module: torch.nn.Module, layer_type: torch.nn, name_prefix=''):
     """
     code modified from: https://github.com/IST-DASLab/gptq
     recursively replace the layers of the model with `layer_type`, with quantized version one
@@ -16,6 +16,7 @@ def make_quant_layer(weight_quantize_module: Quantizer, module: torch.nn.Module,
         weight_quantize_module: quantizer module
         module: model
         layer_type: nn.Linear or nn.Conv2d
+        name_prefix: the prefix of the module name
 
     Returns:
 
@@ -25,21 +26,28 @@ def make_quant_layer(weight_quantize_module: Quantizer, module: torch.nn.Module,
     for attr in dir(module):
         tmp = getattr(module, attr)
         if type(tmp) == layer_type:
+            full_name = f"{name_prefix}.{attr}" if name_prefix else attr
             setattr(
                 module, attr,
-                construct_quant_layer(weight_quantize_module, tmp, layer_type)
+                construct_quant_layer(weight_quantize_module, tmp, layer_type, layer_name=full_name)
             )
             quant_layer = module.__getattr__(attr)
             quant_layer.weight.data = tmp.weight.data
             if tmp.bias is not None:
                 quant_layer.bias.data = tmp.bias.data
 
-    for name1, child in module.named_children():
-        make_quant_layer(weight_quantize_module, child, layer_type)
+    for name, child in module.named_children():
+        make_quant_layer(weight_quantize_module, child, layer_type, name_prefix=f"{name_prefix}.{name}" if name_prefix else name)
 
 
-def construct_quant_layer(weight_quantize_module: Quantizer, layer: torch.nn.Module, layer_type: torch.nn):
+def construct_quant_layer(weight_quantize_module: Quantizer, layer: torch.nn.Module, layer_type: torch.nn, layer_name: str):
+    # Pass layer_name to the quantizer constructor through params
+    # if 'params' not in weight_quantize_module._params:
+    #     weight_quantize_module._params['params'] = {}
+    # weight_quantize_module._params['params']['layer_name'] = layer_name
+    
     wq_module = weight_quantize_module.construct()
+    wq_module.layer_name = layer_name
     wq_module._init_q_params(layer.weight)
     if layer_type == nn.Linear:
         return Quantized_Linear(wq_module, layer.in_features, layer.out_features,

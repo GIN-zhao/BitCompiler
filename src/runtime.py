@@ -140,8 +140,8 @@ class Runtime(FromParams):
 
         self.load_model()
         train_loader, test_loader, valid_loader, calibration_loader = self.dataset.build()
-        BER_list = np.array([0., 0.0001, 0.0004, 0.0008, 0.001, 0.002, 0.004, 0.006, 0.008, 0.01])
-        # BER_list = np.array([0.0001, 0.0005, 0.001, 0.005])
+        # BER_list = np.array([0., 0.0001, 0.0004, 0.0008, 0.001, 0.002, 0.004, 0.006, 0.008, 0.01])
+        BER_list = np.array([0.02, 0.05, 0.1, 0.15])
         for ber in BER_list:
             self.attack.simulate(self.model, ber, test_loader)
 

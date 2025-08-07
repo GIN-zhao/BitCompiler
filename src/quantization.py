@@ -5,6 +5,8 @@ from common import FromParams, Registrable, Params
 import numpy as np
 from scipy.optimize import minimize
 import json
+from scipy.stats import kurtosis, skew
+import logging
 
 
 def int2bin(input: torch.tensor, num_bits: int):
@@ -225,11 +227,12 @@ class _Clamp_MAD(_Clamp):
 
 
 class Quantizer(torch.nn.Module, Registrable):
-    def __init__(self, N_bits: int = 4, signed: bool = True, p0: float = 0.):
+    def __init__(self, N_bits: int = 4, signed: bool = True, p0: float = 0., layer_name: str = None):
         super().__init__()
         self.N_bits = N_bits
         self.signed = signed
         self.p0 = p0
+        self.layer_name = layer_name
         self.max_range = 0.
         self.min_range = 0.
         if self.signed:
@@ -440,6 +443,37 @@ class BWAQ(WCAT):
     def __init__(self, bwaq_lambda: float = 0.01, **kwargs):
         super().__init__(**kwargs)
         self.bwaq_lambda = bwaq_lambda
+
+    def _init_q_params(self, input: torch.tensor):
+        if self.init_method == 'adaptive':
+            # print(f'init_method={self.init_method}')
+            # 1. Distribution-aware initialization
+            w_numpy = input.detach().cpu().numpy().flatten()
+            skewness = skew(w_numpy)
+            kurt = kurtosis(w_numpy)
+
+            baseline_q_range = self._bruteforce_optimal_MSE(input)
+            
+            dist_scale_factor = 1.0 + 0.05 * abs(skewness) + 0.02 * abs(kurt)
+            adaptive_q_range = baseline_q_range * dist_scale_factor
+
+            # 2. Layer-aware adaptation
+            layer_scale_factor = 1.0
+            # Heuristic: first and last layers are more sensitive.
+            if self.layer_name and ('conv1' in self.layer_name or 'fc' in self.layer_name):
+                layer_scale_factor = 1.2 # Use a 20% wider range
+                adaptive_q_range *= layer_scale_factor
+
+            self.q_range.data = adaptive_q_range
+            print(f"Adaptive init for layer {self.layer_name}: "
+                         f"baseline_range={baseline_q_range:.4f}, "
+                         f"skew={skewness:.2f}, kurtosis={kurt:.2f}, "
+                         f"dist_factor={dist_scale_factor:.2f}, "
+                         f"layer_factor={layer_scale_factor:.2f}, "
+                         f"final_range={self.q_range.data:.4f}")
+        else:
+            # Fallback to parent WCAT's initialization methods
+            super()._init_q_params(input)
 
 
 @Quantizer.register("wclip")

@@ -7,7 +7,7 @@ base + {
         p0: 0.0,
         type: "bwaq",
         use_grad_scaled: 1,
-        init_method: "MSE",
+        init_method: "adaptive",
         bwaq_lambda: 0.01,
         clip:
             {
